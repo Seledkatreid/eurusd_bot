@@ -1,4 +1,3 @@
-
 import pandas as pd
 import ta
 
@@ -29,9 +28,17 @@ def analyze(data):
 
     if signal:
         entry = last['close']
-        tp = round(entry + 0.0010, 5) if signal == 'BUY' else round(entry - 0.0010, 5)
-        sl = round(entry - 0.0050, 5) if signal == 'BUY' else round(entry + 0.0050, 5)
-        time_estimate = round(10 / avg_pips_per_minute)
+        recent_high = df['close'].rolling(10).max().iloc[-1]
+        recent_low = df['close'].rolling(10).min().iloc[-1]
+
+        if signal == 'BUY':
+            tp = round(recent_high, 5)
+            sl = round(recent_low, 5)
+        else:
+            tp = round(recent_low, 5)
+            sl = round(recent_high, 5)
+
+        time_estimate = round(abs(tp - entry) / avg_volatility) if avg_volatility else 5
         return signal, entry, tp, sl, time_estimate
     else:
         return None, None, None, None, None
