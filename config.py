@@ -1,8 +1,8 @@
-# Токен Telegram-бота
-TOKEN = "8148012923:AAGMLwawfHBv_fqqMUsf08Odb5kKSiakIKo"
-
-# Настройки для API котировок (Alpha Vantage)
-API_KEY = "YW2H5KYSCUTN8A12"
+API_KEY = "8715cc7afe1745758b4668cd5cffe3d0"  # Твой ключ Twelve Data
 SYMBOL = "EUR/USD"
-INTERVAL = "1min"
-BASE_URL = "https://www.alphavantage.co/query"
+INTERVALS = {
+    "1 мин": "1min",
+    "3 мин": "3min",
+    "5 мин": "5min",
+    "15 мин": "15min"
+}

@@ -1,56 +1,38 @@
-import telebot
-import pandas as pd
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from config import TOKEN
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from config import INTERVALS
 from data_fetch import fetch_data
-from analysis import analyze
+from signal_logic import analyze_data
 
-bot = telebot.TeleBot(TOKEN)
+TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
 
-# Главное меню выбора таймфрейма
-def build_timeframe_keyboard():
-    markup = InlineKeyboardMarkup()
-    buttons = [
-        InlineKeyboardButton(text="1 мин", callback_data="tf_1"),
-        InlineKeyboardButton(text="3 мин", callback_data="tf_3"),
-        InlineKeyboardButton(text="5 мин", callback_data="tf_5"),
-        InlineKeyboardButton(text="15 мин", callback_data="tf_15"),
-    ]
-    markup.row(*buttons[:2])
-    markup.row(*buttons[2:])
-    return markup
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[
+        InlineKeyboardButton(text=label, callback_data=label)
+        for label in ["1 мин", "3 мин"]
+    ], [
+        InlineKeyboardButton(text=label, callback_data=label)
+        for label in ["5 мин", "15 мин"]
+    ]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Выберите таймфрейм для сигнала:", reply_markup=reply_markup)
 
-@bot.message_handler(commands=['start', 'signal'])
-def send_menu(message):
-    bot.send_message(message.chat.id, 
-                     "Выберите таймфрейм для сигнала:", 
-                     reply_markup=build_timeframe_keyboard())
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("tf_"))
-def callback_timeframe(call: CallbackQuery):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    tf_label = query.data
+    interval = INTERVALS[tf_label]
     try:
-        tf = int(call.data.split("_")[1])
-        # агрегация данных
-        raw = fetch_data()
-        df = pd.DataFrame(raw)
-        df['datetime'] = pd.to_datetime(df['datetime'])
-        df.set_index('datetime', inplace=True)
-        df = df.resample(f'{tf}T').agg({'close': 'last'}).dropna().reset_index()
-
-        signal, entry, tp, sl, eta = analyze(df)
-        if signal:
-            text = (
-                f"📊 Сигнал: {signal}\n"
-                f"💰 Вход: {entry}\n"
-                f"🎯 TP: {tp} | 🛑 SL: {sl}\n"
-                f"⏳ Прогноз до TP: ~{eta} мин\n"
-                f"🕒 Таймфрейм: {tf} мин"
-            )
-        else:
-            text = f"На таймфрейме {tf} мин сигналов нет."
-        bot.send_message(call.message.chat.id, text)
+        data = fetch_data(interval)
+        signal = analyze_data(data)
     except Exception as e:
-        bot.send_message(call.message.chat.id, f"Ошибка: {e}")
+        signal = f"Ошибка: {e}"
+    await query.edit_message_text(text=f"Таймфрейм: {tf_label}
+{signal}")
 
-if __name__ == '__main__':
-    bot.polling()
+app = ApplicationBuilder().token(TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CallbackQueryHandler(button_handler))
+
+if __name__ == "__main__":
+    app.run_polling()

@@ -1,28 +1,11 @@
 import requests
-import pandas as pd
-from config import API_KEY, SYMBOL, INTERVAL, BASE_URL
+from config import API_KEY, SYMBOL
 
-def fetch_data():
-    params = {
-        "function": "FX_INTRADAY",
-        "from_symbol": SYMBOL.split('/')[0],
-        "to_symbol": SYMBOL.split('/')[1],
-        "interval": INTERVAL,
-        "apikey": API_KEY,
-        "outputsize": "compact"
-    }
-    response = requests.get(BASE_URL, params=params)
+def fetch_data(interval):
+    url = f"https://api.twelvedata.com/time_series?symbol={SYMBOL}&interval={interval}&apikey={API_KEY}&outputsize=30"
+    response = requests.get(url)
     data = response.json()
-
-    if "Time Series FX (" + INTERVAL + ")" not in data:
-        raise Exception("Ошибка получения данных: " + str(data))
-
-    ts_data = data["Time Series FX (" + INTERVAL + ")"]
-    records = []
-    for time, values in ts_data.items():
-        records.append({
-            "datetime": time,
-            "close": float(values["4. close"])
-        })
-    records.sort(key=lambda x: x["datetime"])
-    return records
+    if "values" in data:
+        return data["values"]
+    else:
+        raise Exception(f"Ошибка получения данных: {data}")
