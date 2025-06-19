@@ -1,38 +1,38 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 from config import INTERVALS
 from data_fetch import fetch_data
-from signal_logic import analyze_data
+from analysis import generate_signal
 
-TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+keyboard = ReplyKeyboardMarkup(
+    [[key for key in INTERVALS.keys()]], resize_keyboard=True, one_time_keyboard=True
+)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[
-        InlineKeyboardButton(text=label, callback_data=label)
-        for label in ["1 мин", "3 мин"]
-    ], [
-        InlineKeyboardButton(text=label, callback_data=label)
-        for label in ["5 мин", "15 мин"]
-    ]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Выберите таймфрейм для сигнала:", reply_markup=reply_markup)
+    await update.message.reply_text("Выберите таймфрейм для сигнала:", reply_markup=keyboard)
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    tf_label = query.data
-    interval = INTERVALS[tf_label]
-    try:
-        data = fetch_data(interval)
-        signal = analyze_data(data)
-    except Exception as e:
-        signal = f"Ошибка: {e}"
-    await query.edit_message_text(text=f"Таймфрейм: {tf_label}
-{signal}")
-
-app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button_handler))
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_input = update.message.text
+    interval = INTERVALS.get(user_input)
+    if not interval:
+        await update.message.reply_text("Пожалуйста, выбери таймфрейм с клавиатуры.")
+        return
+    
+    data, error = fetch_data(interval)
+    if error:
+        await update.message.reply_text(error)
+    else:
+        signal = generate_signal(data)
+        await update.message.reply_text(signal)
 
 if __name__ == "__main__":
+    from config import API_KEY
+    import os
+    from telegram.ext import Application
+
+    token = os.getenv(8148012923:AAGMLwawfHBv_fqqMUsf08Odb5kKSiakIKo)
+
+    app = ApplicationBuilder().token(token).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling()

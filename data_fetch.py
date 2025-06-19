@@ -1,11 +1,17 @@
 import requests
-from config import API_KEY, SYMBOL
+from config import API_KEY, SYMBOL, BASE_URL
 
 def fetch_data(interval):
-    url = f"https://api.twelvedata.com/time_series?symbol={SYMBOL}&interval={interval}&apikey={API_KEY}&outputsize=30"
-    response = requests.get(url)
+    params = {
+        "symbol": SYMBOL,
+        "interval": interval,
+        "apikey": API_KEY,
+        "outputsize": 30
+    }
+    response = requests.get(BASE_URL, params=params)
     data = response.json()
-    if "values" in data:
-        return data["values"]
-    else:
-        raise Exception(f"Ошибка получения данных: {data}")
+
+    if "values" not in data:
+        return None, f"Ошибка получения данных: {data.get('message', data)}"
+    
+    return data["values"], None
