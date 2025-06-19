@@ -13,13 +13,15 @@ def analyze(data):
     df['rsi'] = ta.momentum.rsi(df['close'], window=14, fillna=True)
     df['macd'] = ta.trend.macd(df['close'], window_slow=26, window_fast=12, fillna=True)
     df['macd_signal'] = ta.trend.macd_signal(df['close'], window_slow=26, window_fast=12, window_sign=9, fillna=True)
-    df['cci'] = ta.trend.cci(df['close'], window=14, fillna=True)
+
+    # Временная замена high/low на close (нет OHLC)
+    df['cci'] = ta.trend.cci(high=df['close'], low=df['close'], close=df['close'], window=14, fillna=True)
     bb = ta.volatility.BollingerBands(df['close'], window=20, fillna=True)
     df['bb_upper'] = bb.bollinger_hband()
     df['bb_lower'] = bb.bollinger_lband()
     df['stoch_rsi'] = ta.momentum.stochrsi(df['close'], window=14, fillna=True)
 
-    # Расчёт волатильности
+    # Волатильность
     df['diff'] = df['close'].diff().abs()
     avg_volatility = df['diff'].tail(10).mean()
     pip_size = 0.0001
@@ -29,7 +31,6 @@ def analyze(data):
 
     signal = None
 
-    # Условия на покупку
     if (
         last['ema_fast'] > last['ema_slow'] and
         last['rsi'] < 70 and
@@ -39,8 +40,6 @@ def analyze(data):
         last['stoch_rsi'] < 0.8
     ):
         signal = 'BUY'
-
-    # Условия на продажу
     elif (
         last['ema_fast'] < last['ema_slow'] and
         last['rsi'] > 30 and
