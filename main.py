@@ -1,41 +1,33 @@
+
 import telebot
-from config import TOKEN
-from data_fetch import fetch_data
+from config import BOT_TOKEN, CHAT_ID
+from data_fetch import get_price_data
 from analysis import analyze
 
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id, "Привет! Напиши /signal 1 или /signal 5, чтобы получить сигнал по EUR/USD с анализом.")
+def send_welcome(message):
+    bot.reply_to(message, "Привет! Я бот по EUR/USD. Напиши /signal для получения сигнала.")
 
 @bot.message_handler(commands=['signal'])
 def send_signal(message):
-    try:
-        parts = message.text.strip().split()
-        timeframe = int(parts[1]) if len(parts) > 1 else 1
-        if timeframe not in [1, 3, 5, 15]:
-            bot.send_message(message.chat.id, "Выбери таймфрейм: 1, 3, 5 или 15 минут. Например: /signal 5")
-            return
+    data = get_price_data()
+    if not data:
+        bot.send_message(message.chat.id, "Ошибка при получении котировок.")
+        return
 
-        raw_data = fetch_data()
-        # Агрегируем данные по таймфрейму
-        df = raw_data.copy()
-        df['datetime'] = pd.to_datetime(df['datetime'])
-        df.set_index('datetime', inplace=True)
-        df = df.resample(f'{timeframe}T').agg({'close': 'last'}).dropna().reset_index()
+    signal, entry, tp, sl, estimate = analyze(data)
+    if signal:
+        msg = (
+            f"📊 Сигнал: {signal}\n"
+            f"💰 Вход: {entry}\n"
+            f"🎯 TP: {tp} | 🛑 SL: {sl}\n"
+            f"⏳ Прогноз времени до TP: ~{estimate} мин"
+        )
+    else:
+        msg = "Сигналов на данный момент нет."
 
-        signal, entry, tp, sl, eta = analyze(df)
-        if signal:
-            bot.send_message(message.chat.id,
-                f"📊 Сигнал: {signal}\n"
-                f"💰 Вход: {entry}\n"
-                f"🎯 TP: {tp} | 🛑 SL: {sl}\n"
-                f"⏳ Прогноз времени до TP: ~{eta} мин"
-            )
-        else:
-            bot.send_message(message.chat.id, "Сигналов нет по текущему анализу.")
-    except Exception as e:
-        bot.send_message(message.chat.id, f"Ошибка: {e}")
+    bot.send_message(message.chat.id, msg)
 
 bot.polling()
