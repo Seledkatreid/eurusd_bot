@@ -1,38 +1,26 @@
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-from config import INTERVALS
+from telegram.ext import ApplicationBuilder, CommandHandler
+from config import RSI_PERIOD, RSI_OVERSOLD, RSI_OVERBOUGHT
 from data_fetch import fetch_data
-from analysis import generate_signal
+from rsi_signal import generate_signal
 
-keyboard = ReplyKeyboardMarkup(
-    [[key for key in INTERVALS.keys()]], resize_keyboard=True, one_time_keyboard=True
-)
+BOT_TOKEN = "8148012923:AAGMLwawfHBv_fqqMUsf08Odb5kKSiakIKo"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Выберите таймфрейм для сигнала:", reply_markup=keyboard)
+async def start(update, context):
+    await update.message.reply_text("Привет! Я бот для бинарных сигналов по EUR/USD.\nНапиши /signal чтобы получить сигнал.")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_input = update.message.text
-    interval = INTERVALS.get(user_input)
-    if not interval:
-        await update.message.reply_text("Пожалуйста, выбери таймфрейм с клавиатуры.")
-        return
-    
-    data, error = fetch_data(interval)
-    if error:
-        await update.message.reply_text(error)
-    else:
-        signal = generate_signal(data)
-        await update.message.reply_text(signal)
+async def signal(update, context):
+    try:
+        df = fetch_data()
+        signal_text = generate_signal(df, RSI_PERIOD, RSI_OVERSOLD, RSI_OVERBOUGHT)
+        await update.message.reply_text(signal_text)
+    except Exception as e:
+        await update.message.reply_text(f"Ошибка: {e}")
+
+def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("signal", signal))
+    app.run_polling()
 
 if __name__ == "__main__":
-    from config import API_KEY
-    import os
-    from telegram.ext import Application
-
-    token = os.getenv(8148012923:AAGMLwawfHBv_fqqMUsf08Odb5kKSiakIKo)
-
-    app = ApplicationBuilder().token(token).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.run_polling()
+    main()
