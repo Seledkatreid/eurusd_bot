@@ -7,11 +7,11 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "Привет! Напиши /signal, чтобы получить торговый сигнал по EUR/USD.")
+    bot.reply_to(message, "Привет! Я анализирую EUR/USD по RSI и Bollinger Bands. Напиши /signal для сигнала.")
 
 @bot.message_handler(commands=['signal'])
 def send_signal(message):
     signal = analyze_signal()
-    bot.reply_to(message, signal)
+    bot.send_message(message.chat.id, signal)
 
 bot.polling()
