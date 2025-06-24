@@ -1,46 +1,83 @@
 import requests
 import pandas as pd
+from datetime import datetime, timedelta
 import os
 
+API_KEY = os.getenv("API_KEY") or '8715cc7afe1745758b4668cd5cffe3d0'
+PAIR = 'EUR/USD'
+INTERVAL = '1min'
+
+def calculate_expiry(minutes):
+    expiry_time = datetime.now() + timedelta(minutes=minutes)
+    return expiry_time.strftime("%H:%M")
+
 def analyze_signal():
-    API_KEY = os.getenv("API_KEY")
-    url = f"https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=1min&apikey={API_KEY}&outputsize=50"
-    response = requests.get(url)
-    if response.status_code != 200 or not response.text.strip():
-        return "❌ Ошибка при получении данных от Twelve Data."
-    data = response.json()
-    if "values" not in data:
-        return "❌ Нет данных в ответе API."
+    rsi_url = f"https://api.twelvedata.com/rsi?symbol=EURUSD&interval={INTERVAL}&apikey={API_KEY}&time_period=14"
+    bb_url = f"https://api.twelvedata.com/bbands?symbol=EURUSD&interval={INTERVAL}&apikey={API_KEY}&time_period=20&stddev=2"
 
-    df = pd.DataFrame(data["values"])
-    df["datetime"] = pd.to_datetime(df["datetime"])
-    df = df.sort_values("datetime")
-    df.set_index("datetime", inplace=True)
-    df = df.astype(float)
+    rsi_response = requests.get(rsi_url)
+    bb_response = requests.get(bb_url)
 
-    df["change"] = df["close"] - df["close"].shift(1)
-    df["gain"] = df["change"].apply(lambda x: x if x > 0 else 0)
-    df["loss"] = df["change"].apply(lambda x: -x if x < 0 else 0)
-    avg_gain = df["gain"].rolling(window=14).mean()
-    avg_loss = df["loss"].rolling(window=14).mean()
-    rs = avg_gain / avg_loss
-    df["rsi"] = 100 - (100 / (1 + rs))
+    if rsi_response.status_code != 200 or bb_response.status_code != 200:
+        return "❌ Ошибка получения данных от API."
 
-    # Bollinger Bands
-    df["ma20"] = df["close"].rolling(window=20).mean()
-    df["std20"] = df["close"].rolling(window=20).std()
-    df["upper_bb"] = df["ma20"] + 2 * df["std20"]
-    df["lower_bb"] = df["ma20"] - 2 * df["std20"]
+    try:
+        rsi = float(rsi_response.json()['values'][0]['rsi'])
+        bb = bb_response.json()['values'][0]
+        upper = float(bb['upper_band'])
+        lower = float(bb['lower_band'])
+        close = float(bb['close'])
+    except Exception as e:
+        return f"❌ Ошибка обработки данных: {e}"
 
-    last = df.iloc[-1]
+    signal_time = datetime.now().strftime("%H:%M")
+    direction = None
+    level = "⚠️ СРЕДНИЙ"
 
-    message = f"📉 RSI: {last['rsi']:.2f}\n📊 BB: Верхняя {last['upper_bb']:.5f}, Нижняя {last['lower_bb']:.5f}\n"
+    expiry_minutes = 3
 
-    signal = "❌ Сигналов нет"
+    if rsi < 25 and close <= lower:
+        direction = "🟢 Сигнал на ПОКУПКУ"
 
-    if last["rsi"] > 75 and last["close"] < last["upper_bb"]:
-        signal = "🔴 Сигнал на ПРОДАЖУ"
-    elif last["rsi"] < 25 and last["close"] > last["lower_bb"]:
-        signal = "🟢 Сигнал на ПОКУПКУ"
+        if rsi < 20:
+            level = "🟢 СИЛЬНЫЙ"
 
-    return f"{signal}\n{message}"
+            expiry_minutes = 5
+        elif rsi < 23:
+            level = "🟢 УВЕРЕННЫЙ"
+
+            expiry_minutes = 4
+
+    elif rsi > 75 and close >= upper:
+        direction = "🔴 Сигнал на ПРОДАЖУ"
+
+        if rsi > 80:
+            level = "🔴 СИЛЬНЫЙ"
+
+            expiry_minutes = 5
+        elif rsi > 77:
+            level = "🔴 УВЕРЕННЫЙ"
+
+            expiry_minutes = 4
+
+    if direction:
+        expiry_time = calculate_expiry(expiry_minutes)
+        return f"{direction}" \
+
+               f"\nRSI: {rsi:.2f}" \
+
+               f"\nЦена закрытия: {close:.5f}" \
+
+               f"\nВерхняя BB: {upper:.5f}" \
+
+               f"\nНижняя BB: {lower:.5f}" \
+
+               f"\nЭкспирация до: {expiry_time}" \
+
+               f"\nСила сигнала: {level}" \
+
+               f"\nВремя сигнала: {signal_time}"
+
+    else:
+
+        return "Нет сигнала: условия RSI и BB не совпадают."
